@@ -23,6 +23,7 @@ risk:
 execution:
   mode: live
   adapter: simmer
+  venue: simmer  # "simmer" = $SIM virtual, "polymarket" = real USDC
 
 alerts:
   enabled: false

@@ -81,13 +81,27 @@ class TestSimmerClient:
 
     @respx.mock
     def test_get_weather_markets(self, client):
-        respx.get("https://api.simmer.markets/api/markets").mock(
+        respx.get("https://api.simmer.markets/api/sdk/markets").mock(
             return_value=Response(200, json={
                 "markets": [
-                    {"id": "m1", "event_name": "NYC Feb 11"},
-                    {"id": "m2", "event_name": "Chicago Feb 11"},
+                    {"id": "m1", "question": "NYC Feb 11", "polymarket_token_id": "tok1"},
+                    {"id": "m2", "question": "Chicago Feb 11", "polymarket_token_id": "tok2"},
                 ]
             })
         )
         markets = client.get_weather_markets()
         assert len(markets) == 2
+
+    @respx.mock
+    def test_build_token_map(self, client):
+        respx.get("https://api.simmer.markets/api/sdk/markets").mock(
+            return_value=Response(200, json={
+                "markets": [
+                    {"id": "sim-uuid-1", "polymarket_token_id": "poly-tok-1"},
+                    {"id": "sim-uuid-2", "polymarket_token_id": "poly-tok-2"},
+                ]
+            })
+        )
+        token_map = client.build_token_to_simmer_map()
+        assert token_map["poly-tok-1"] == "sim-uuid-1"
+        assert token_map["poly-tok-2"] == "sim-uuid-2"

@@ -10,14 +10,35 @@ logger = logging.getLogger(__name__)
 
 
 class LiveAdapter:
-    """Execute real trades via Simmer → Polymarket.
+    """Execute trades via Simmer SDK.
 
-    Uses the Polymarket condition_id as the market identifier.
-    Simmer's API accepts Polymarket market IDs for trade routing.
+    Supports both `simmer` venue ($SIM virtual) and `polymarket` venue (real USDC).
+    Maps Polymarket CLOB token IDs to Simmer UUIDs before trading.
     """
 
-    def __init__(self, simmer_client: SimmerClient | None = None):
+    def __init__(
+        self,
+        simmer_client: SimmerClient | None = None,
+        venue: str = "simmer",
+    ):
         self.client = simmer_client or SimmerClient()
+        self.venue = venue  # "simmer" for $SIM, "polymarket" for real USDC
+        self._token_map: dict[str, str] | None = None
+
+    def _resolve_simmer_id(self, clob_token_id: str, market_id: str) -> str | None:
+        """Resolve a Polymarket CLOB token ID to a Simmer market UUID."""
+        if self._token_map is None:
+            logger.info("Building Polymarket→Simmer token map...")
+            self._token_map = self.client.build_token_to_simmer_map()
+            logger.info("Mapped %d Simmer weather markets", len(self._token_map))
+
+        simmer_id = self._token_map.get(clob_token_id)
+        if simmer_id is None:
+            logger.warning(
+                "No Simmer market found for token %s (market_id=%s)",
+                clob_token_id[:20] + "...", market_id,
+            )
+        return simmer_id
 
     def execute(self, intent: OrderIntent) -> OrderResult:
         """Execute a buy order through Simmer.
@@ -34,12 +55,24 @@ class LiveAdapter:
             intent.net_edge,
         )
 
+        # Resolve Simmer market UUID from Polymarket CLOB token ID
+        simmer_market_id = self._resolve_simmer_id(intent.clob_token_id, intent.market_id)
+        if simmer_market_id is None:
+            return OrderResult(
+                idempotency_key=intent.idempotency_key,
+                status=OrderStatus.REJECTED,
+                fill_price=None,
+                fill_size=None,
+                error_message=f"No Simmer market found for token {intent.clob_token_id[:20]}...",
+                executed_at=utc_now_iso(),
+            )
+
         try:
-            # Use condition_id as market identifier for Simmer
             result = self.client.buy(
-                market_id=intent.market_id,
+                market_id=simmer_market_id,
                 amount_usd=intent.size_usd,
                 side="yes" if intent.side == "BUY" else "no",
+                venue=self.venue,
             )
 
             if result.get("success") or result.get("trade_id"):
@@ -91,14 +124,20 @@ class LiveAdapter:
         market_id: str,
         shares: float,
         idempotency_key: str,
+        clob_token_id: str = "",
     ) -> OrderResult:
         """Execute a sell order through Simmer."""
-        logger.info("LIVE SELL: %s, %.2f shares", market_id, shares)
+        # Resolve Simmer ID for sells too
+        simmer_id = self._resolve_simmer_id(clob_token_id, market_id) if clob_token_id else None
+        trade_market_id = simmer_id or market_id
+
+        logger.info("LIVE SELL: %s (simmer=%s), %.2f shares", market_id, trade_market_id, shares)
         try:
             result = self.client.sell(
-                market_id=market_id,
+                market_id=trade_market_id,
                 shares=shares,
                 side="yes",
+                venue=self.venue,
             )
 
             if result.get("success") or result.get("trade_id"):

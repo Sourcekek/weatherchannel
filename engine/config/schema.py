@@ -15,6 +15,11 @@ class ExecutionAdapter(StrEnum):
     SIMMER = "simmer"
 
 
+class ExecutionVenue(StrEnum):
+    SIMMER = "simmer"        # $SIM virtual trading
+    POLYMARKET = "polymarket"  # Real USDC trading
+
+
 class CityConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -56,6 +61,7 @@ class ExecutionConfig(BaseModel):
 
     mode: ExecutionMode = ExecutionMode.DRY_RUN
     adapter: ExecutionAdapter = ExecutionAdapter.DRY_RUN
+    venue: ExecutionVenue = ExecutionVenue.SIMMER
 
 
 class AlertConfig(BaseModel):

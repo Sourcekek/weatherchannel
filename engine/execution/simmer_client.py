@@ -71,13 +71,15 @@ class SimmerClient:
         market_id: str,
         amount_usd: float,
         side: str = "yes",
+        venue: str = "simmer",
     ) -> dict:
         """Buy shares in a market.
 
         Args:
-            market_id: Simmer or Polymarket market/condition ID.
+            market_id: Simmer market UUID.
             amount_usd: USD amount to spend.
             side: "yes" or "no".
+            venue: "simmer" ($SIM virtual) or "polymarket" (real USDC).
 
         Returns:
             Trade result dict with success, trade_id, shares_bought, etc.
@@ -86,7 +88,7 @@ class SimmerClient:
             "market_id": market_id,
             "side": side,
             "amount": amount_usd,
-            "venue": "polymarket",
+            "venue": venue,
             "source": TRADE_SOURCE,
         })
 
@@ -95,13 +97,15 @@ class SimmerClient:
         market_id: str,
         shares: float,
         side: str = "yes",
+        venue: str = "simmer",
     ) -> dict:
         """Sell shares in a market.
 
         Args:
-            market_id: Simmer or Polymarket market/condition ID.
+            market_id: Simmer market UUID.
             shares: Number of shares to sell.
             side: "yes" or "no".
+            venue: "simmer" ($SIM virtual) or "polymarket" (real USDC).
 
         Returns:
             Trade result dict with success, trade_id, etc.
@@ -111,7 +115,7 @@ class SimmerClient:
             "side": side,
             "action": "sell",
             "shares": shares,
-            "venue": "polymarket",
+            "venue": venue,
             "source": TRADE_SOURCE,
         })
 
@@ -130,7 +134,7 @@ class SimmerClient:
 
     def get_weather_markets(self) -> list[dict]:
         """Get active weather-tagged markets from Simmer."""
-        result = self._request("GET", "/api/markets?tags=weather&status=active&limit=200")
+        result = self._request("GET", "/api/sdk/markets?tags=weather&status=active&limit=200")
         return result.get("markets", []) if isinstance(result, dict) else []
 
     def get_market_context(self, market_id: str, my_probability: float | None = None) -> dict:
@@ -139,3 +143,18 @@ class SimmerClient:
         if my_probability is not None:
             endpoint += f"?my_probability={my_probability}"
         return self._request("GET", endpoint)
+
+    def build_token_to_simmer_map(self) -> dict[str, str]:
+        """Build mapping from Polymarket CLOB token ID → Simmer market UUID.
+
+        Each Simmer market has a `polymarket_token_id` field that corresponds
+        to the CLOB YES token ID from Gamma API.
+        """
+        markets = self.get_weather_markets()
+        mapping: dict[str, str] = {}
+        for m in markets:
+            poly_token = m.get("polymarket_token_id", "")
+            simmer_id = m.get("id", "")
+            if poly_token and simmer_id:
+                mapping[poly_token] = simmer_id
+        return mapping

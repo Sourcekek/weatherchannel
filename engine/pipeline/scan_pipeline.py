@@ -155,7 +155,8 @@ class ScanPipeline:
             if self.config.execution.mode == ExecutionMode.LIVE:
                 from engine.execution.simmer_client import SimmerClient
                 simmer = SimmerClient()
-                adapter = LiveAdapter(simmer_client=simmer)
+                venue = self.config.execution.venue.value
+                adapter = LiveAdapter(simmer_client=simmer, venue=venue)
             else:
                 adapter = DryRunAdapter()
             executor = Executor(conn, adapter)
