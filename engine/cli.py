@@ -46,6 +46,22 @@ def main(argv: list[str] | None = None) -> int:
     set_p = config_sub.add_parser("set", help="Set a config value")
     set_p.add_argument("keyvalue", help="key=value to set")
 
+    # daemon
+    daemon_p = sub.add_parser("daemon", help="Continuous scan daemon (2-min loop)")
+    daemon_p.add_argument(
+        "--live", action="store_true", help="Enable live execution"
+    )
+    daemon_p.add_argument(
+        "--interval", type=int, default=120,
+        help="Seconds between scans (default: 120)",
+    )
+    daemon_p.add_argument(
+        "--stop", action="store_true", help="Stop running daemon",
+    )
+    daemon_p.add_argument(
+        "--status", action="store_true", help="Show daemon status",
+    )
+
     # pause / resume / kill-switch
     sub.add_parser("pause", help="Pause scanning")
     sub.add_parser("resume", help="Resume scanning")
@@ -67,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "scan":
         return _cmd_scan(config, args)
+    elif args.command == "daemon":
+        return _cmd_daemon(config, args)
     elif args.command == "status":
         return _cmd_status(config, args)
     elif args.command == "health":
@@ -82,6 +100,24 @@ def main(argv: list[str] | None = None) -> int:
     else:
         parser.print_help()
         return 1
+
+
+def _cmd_daemon(config, args) -> int:
+    from engine.daemon import ScanDaemon, daemon_status, stop_daemon
+
+    if args.stop:
+        return stop_daemon()
+    if args.status:
+        return daemon_status()
+
+    daemon = ScanDaemon(
+        config=config,
+        db_path=args.db,
+        interval=args.interval,
+        live=args.live,
+    )
+    daemon.start()
+    return 0
 
 
 def _cmd_scan(config, args) -> int:
