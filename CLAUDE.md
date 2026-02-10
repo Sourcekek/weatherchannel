@@ -283,6 +283,11 @@ Add new rules when recurring mistakes appear.
 - Do not commit secrets, credentials, `.env`, or private keys
 - Do not force-push shared branches without coordination
 
+### Ingest Mistakes
+- Polymarket market slugs use `event_slug-bucket_suffix` format, NOT `...-be-suffix`
+- Always test slug parsing against live Gamma API responses, not assumed formats
+- When parsing fails silently (0 buckets), add debug logging to surface the mismatch
+
 ### Operations Mistakes
 - Do not enable live mode by default
 - Do not remove pause/kill controls from operator surface
