@@ -1,0 +1,36 @@
+# Live trading config — training wheels
+# Created 2026-02-09. Tighter limits for initial live trading.
+
+strategy:
+  min_edge_threshold: 0.08
+  max_entry_price: 0.15
+  min_exit_price: 0.45
+  uncertainty_base_f: 2.5
+  uncertainty_per_day_f: 0.5
+  fee_estimate: 0.02
+  slippage_estimate: 0.01
+
+risk:
+  max_position_size_usd: 2.00
+  max_trades_per_run: 2
+  max_total_exposure_usd: 10.00
+  max_per_city_exposure_usd: 5.00
+  max_daily_loss_usd: 5.00
+  cooldown_minutes: 60
+  min_hours_to_resolution: 12.0
+  slippage_ceiling: 0.03
+
+execution:
+  mode: live
+  adapter: simmer
+
+alerts:
+  enabled: false
+  webhook_url: ""
+
+ops:
+  scan_interval_minutes: 30
+  forecast_max_age_minutes: 180
+  market_data_max_age_minutes: 15
+  lookahead_days: 5
+  request_delay_ms: 300
