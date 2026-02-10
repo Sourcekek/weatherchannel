@@ -19,6 +19,7 @@ from engine.models.execution import OrderIntent, OrderStatus
 from engine.models.forecast import ForecastPoint
 from engine.models.market import MarketEvent
 from engine.models.reporting import RunSummary
+from engine.pipeline.exit_pipeline import ExitPipeline
 from engine.reporting.formatters import format_summary_chat, format_summary_text
 from engine.reporting.run_summarizer import RunSummarizer
 from engine.risk.engine import RiskEngine
@@ -152,7 +153,9 @@ class ScanPipeline:
 
             adapter: DryRunAdapter | LiveAdapter
             if self.config.execution.mode == ExecutionMode.LIVE:
-                adapter = LiveAdapter()
+                from engine.execution.simmer_client import SimmerClient
+                simmer = SimmerClient()
+                adapter = LiveAdapter(simmer_client=simmer)
             else:
                 adapter = DryRunAdapter()
             executor = Executor(conn, adapter)
@@ -223,10 +226,20 @@ class ScanPipeline:
                     logger.info("Max trades per run reached, stopping")
                     break
 
-            # 6. REPORT
+            # 6. EXIT PIPELINE
+            exit_pipeline = ExitPipeline(self.config, conn, gamma, run_id)
+            exit_summary = exit_pipeline.run()
+            logger.info(
+                "Exit scan: %d checked, %d exits found, %d executed",
+                exit_summary["positions_checked"],
+                exit_summary["exits_found"],
+                exit_summary["exits_executed"],
+            )
+
+            # 7. REPORT
             summarizer.record_exposure(
                 position_repo.get_total_open_exposure(conn),
-                0.0,  # PnL calculation deferred
+                0.0,  # PnL from daily_pnl table
             )
             summarizer.record_duration(time.monotonic() - start_time)
             summary = summarizer.finalize()

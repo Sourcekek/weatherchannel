@@ -99,3 +99,38 @@ def get_daily_pnl(conn: sqlite3.Connection, date: str) -> dict | None:
     if row is None:
         return None
     return dict(row)
+
+
+def update_position_price(
+    conn: sqlite3.Connection, position_id: int, current_price: float
+) -> None:
+    """Update a position's current price and unrealized PnL."""
+    row = conn.execute(
+        "SELECT entry_price, size_usd FROM positions WHERE id = ?",
+        (position_id,),
+    ).fetchone()
+    if row is None:
+        return
+    entry_price = row[0]
+    size_usd = row[1]
+    # PnL = (current - entry) / entry * size  (shares * price_change)
+    if entry_price > 0:
+        shares = size_usd / entry_price
+        unrealized_pnl = shares * (current_price - entry_price)
+    else:
+        unrealized_pnl = 0.0
+    conn.execute(
+        "UPDATE positions SET current_price = ?, unrealized_pnl = ? WHERE id = ?",
+        (current_price, unrealized_pnl, position_id),
+    )
+    conn.commit()
+
+
+def get_open_positions_with_ids(conn: sqlite3.Connection) -> list[dict]:
+    """Get all open positions including row IDs."""
+    rows = conn.execute(
+        "SELECT id, market_id, city_slug, target_date, bucket_label, "
+        "entry_price, current_price, size_usd, unrealized_pnl, status "
+        "FROM positions WHERE status = 'open'"
+    ).fetchall()
+    return [dict(r) for r in rows]

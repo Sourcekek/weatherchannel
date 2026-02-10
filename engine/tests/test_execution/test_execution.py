@@ -87,10 +87,11 @@ class TestDryRunAdapter:
 
 
 class TestLiveAdapter:
-    def test_raises_not_implemented(self):
-        adapter = LiveAdapter()
-        with pytest.raises(NotImplementedError, match="Gate B"):
-            adapter.execute(_make_intent())
+    def test_requires_api_key(self):
+        """LiveAdapter requires SIMMER_API_KEY to construct."""
+        from engine.execution.simmer_client import SimmerClientError
+        with pytest.raises(SimmerClientError, match="not set"):
+            LiveAdapter()  # No API key set in test env
 
 
 class TestExecutor:
@@ -126,10 +127,8 @@ class TestExecutor:
         assert result.status == OrderStatus.REJECTED
         assert "Kill switch" in result.error_message
 
-    def test_live_adapter_fails_gracefully(self, tmp_path: Path):
-        db = _make_db(tmp_path)
-        executor = Executor(db, LiveAdapter())
-        result = executor.execute(_make_intent())
-
-        assert result.status == OrderStatus.FAILED
-        assert "Gate B" in result.error_message
+    def test_live_adapter_requires_api_key(self, tmp_path: Path):
+        """LiveAdapter can't be constructed without SIMMER_API_KEY."""
+        from engine.execution.simmer_client import SimmerClientError
+        with pytest.raises(SimmerClientError, match="not set"):
+            Executor(_make_db(tmp_path), LiveAdapter())

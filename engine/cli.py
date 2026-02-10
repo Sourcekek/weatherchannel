@@ -87,10 +87,12 @@ def main(argv: list[str] | None = None) -> int:
 def _cmd_scan(config, args) -> int:
     if args.live:
         config = config.model_copy(
-            update={"execution": {"mode": "live", "adapter": "simmer"}}
+            update={"execution": config.execution.model_copy(
+                update={"mode": ExecutionMode.LIVE, "adapter": "simmer"}
+            )}
         )
     if config.execution.mode == ExecutionMode.LIVE:
-        print("WARNING: Running in LIVE mode")
+        print("⚠️  WARNING: Running in LIVE mode — real money at stake")
     pipeline = ScanPipeline(config, args.db)
     summary = pipeline.run()
     return 0 if not summary.errors else 1
