@@ -74,7 +74,7 @@ def _parse_gamma_event(
 
     buckets: list[BucketMarket] = []
     for m in markets:
-        bm = _parse_bucket_market(m)
+        bm = _parse_bucket_market(m, event_slug=slug)
         if bm is not None:
             buckets.append(bm)
 
@@ -92,7 +92,7 @@ def _parse_gamma_event(
     )
 
 
-def _parse_bucket_market(m: dict) -> BucketMarket | None:
+def _parse_bucket_market(m: dict, event_slug: str = "") -> BucketMarket | None:
     """Parse a single market from Gamma API into a BucketMarket."""
     try:
         # Parse CLOB token IDs from JSON string
@@ -111,10 +111,20 @@ def _parse_bucket_market(m: dict) -> BucketMarket | None:
         group_title = m.get("groupItemTitle", "")
         slug = m.get("slug", "")
 
-        # Try to extract bucket suffix from slug
-        # Slug format: "will-the-highest-...-be-{suffix}"
+        # Extract bucket suffix from market slug.
+        # Market slug = event_slug + "-" + bucket_suffix
+        # e.g. "highest-temperature-in-nyc-on-february-11-2026-34-35f"
+        # event_slug = "highest-temperature-in-nyc-on-february-11-2026"
+        # bucket_suffix = "34-35f"
         bucket = None
-        if slug:
+        if slug and event_slug and slug.startswith(event_slug + "-"):
+            suffix = slug[len(event_slug) + 1:]
+            parsed = parse_bucket_suffix(suffix)
+            if parsed is not None:
+                bucket = parsed.bucket
+
+        # Fallback: try legacy "-be-" separator
+        if bucket is None and slug:
             parts = slug.rsplit("-be-", 1)
             if len(parts) == 2:
                 parsed = parse_bucket_suffix(parts[1])
