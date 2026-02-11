@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ Weather Trading Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2332;
+  --border: #1e2d3d;
+  --text: #e2e8f0;
+  --text-dim: #94a3b8;
+  --accent: #3b82f6;
+  --green: #22c55e;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --purple: #a855f7;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; background: var(--bg); color: var(--text); }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header h1 span { color: var(--amber); }
+.status-bar { display: flex; gap: 16px; align-items: center; font-size: 12px; }
+.status-pill { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.pill-live { background: rgba(34,197,94,0.15); color: var(--green); }
+.pill-dry { background: rgba(245,158,11,0.15); color: var(--amber); }
+.pill-paused { background: rgba(239,68,68,0.15); color: var(--red); }
+.pill-ok { background: rgba(34,197,94,0.15); color: var(--green); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px 24px; }
+.grid-full { grid-column: 1 / -1; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.card-value { font-size: 28px; font-weight: 700; }
+
+.metric-row { display: flex; gap: 16px; }
+.metric { flex: 1; }
+.metric-label { font-size: 11px; color: var(--text-dim); margin-bottom: 2px; }
+.metric-val { font-size: 20px; font-weight: 600; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 8px 10px; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; }
+td { padding: 8px 10px; border-bottom: 1px solid rgba(30,45,61,0.5); }
+tr:hover { background: rgba(59,130,246,0.05); }
+
+.pos-green { color: var(--green); }
+.pos-red { color: var(--red); }
+.pos-amber { color: var(--amber); }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+.badge-opp { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-blocked { background: rgba(239,68,68,0.15); color: var(--red); }
+.badge-filled { background: rgba(59,130,246,0.15); color: var(--accent); }
+.badge-dry { background: rgba(168,85,247,0.15); color: var(--purple); }
+
+/* Controls panel */
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.control-group { display: flex; flex-direction: column; gap: 4px; }
+.control-group label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; }
+.control-group input, .control-group select {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); padding: 8px 10px; font-size: 13px; font-family: inherit;
+}
+.control-group input:focus, .control-group select:focus { outline: none; border-color: var(--accent); }
+
+.btn { padding: 8px 16px; border-radius: 8px; border: none; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-danger { background: var(--red); color: white; }
+.btn-danger:hover { background: #dc2626; }
+.btn-success { background: var(--green); color: white; }
+.btn-success:hover { background: #16a34a; }
+.btn-amber { background: var(--amber); color: #000; }
+.btn-amber:hover { background: #d97706; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+.refresh-indicator { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+.refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.chart-container { position: relative; height: 200px; }
+.toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; z-index: 1000; animation: slideIn 0.3s; }
+.toast-success { background: var(--green); color: #000; }
+.toast-error { background: var(--red); color: white; }
+@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.log-entry { padding: 6px 0; border-bottom: 1px solid rgba(30,45,61,0.3); font-size: 12px; }
+.log-time { color: var(--text-dim); font-size: 10px; }
+
+.empty-state { text-align: center; padding: 24px; color: var(--text-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ <span>Weather Trading</span> Dashboard</h1>
+  <div class="status-bar">
+    <div class="refresh-indicator">
+      <div class="refresh-dot"></div>
+      <span id="refresh-label">Live</span>
+    </div>
+    <span id="mode-pill" class="status-pill pill-dry">DRY-RUN</span>
+    <span id="paused-pill" class="status-pill" style="display:none">PAUSED</span>
+    <span id="kill-pill" class="status-pill pill-paused" style="display:none">KILL SWITCH</span>
+    <span id="last-update" style="font-size:11px;color:var(--text-dim)"></span>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- ── KPI Cards ── -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Total Exposure</span></div>
+    <div class="card-value" id="kpi-exposure">$0.00</div>
+    <div class="metric-row" style="margin-top:8px">
+      <div class="metric"><div class="metric-label">Positions</div><div class="metric-val" id="kpi-positions">0</div></div>
+      <div class="metric"><div class="metric-label">Last Scan</div><div class="metric-val" id="kpi-last-scan">—</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">P&L Summary</span></div>
+    <div class="card-value" id="kpi-pnl">$0.00</div>
+    <div class="metric-row" style="margin-top:8px">
+      <div class="metric"><div class="metric-label">Winners</div><div class="metric-val pos-green" id="kpi-winners">0</div></div>
+      <div class="metric"><div class="metric-label">Losers</div><div class="metric-val pos-red" id="kpi-losers">0</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Scan Activity (Last 25)</span></div>
+    <div class="metric-row">
+      <div class="metric"><div class="metric-label">Total Runs</div><div class="metric-val" id="kpi-runs">0</div></div>
+      <div class="metric"><div class="metric-label">Opportunities</div><div class="metric-val pos-green" id="kpi-opps">0</div></div>
+      <div class="metric"><div class="metric-label">Trades</div><div class="metric-val" id="kpi-trades">0</div></div>
+    </div>
+  </div>
+
+  <!-- ── Positions Table ── -->
+  <div class="card grid-full">
+    <div class="card-header">
+      <span class="card-title">Open Positions</span>
+      <span id="pos-count" style="font-size:12px;color:var(--text-dim)"></span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>City</th><th>Bucket</th><th>Date</th><th>Entry</th><th>Current</th><th>Size</th><th>P&L</th><th>%</th></tr>
+      </thead>
+      <tbody id="positions-body"></tbody>
+    </table>
+    <div id="positions-empty" class="empty-state" style="display:none">No open positions</div>
+  </div>
+
+  <!-- ── Edge Chart ── -->
+  <div class="card grid-full">
+    <div class="card-header"><span class="card-title">Edge Opportunities Over Time</span></div>
+    <div class="chart-container"><canvas id="edge-chart"></canvas></div>
+  </div>
+
+  <!-- ── Recent Edges Table ── -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Recent Signals</span></div>
+    <div style="max-height:300px;overflow-y:auto">
+      <table>
+        <thead><tr><th>City</th><th>Bucket</th><th>Edge</th><th>Status</th></tr></thead>
+        <tbody id="edges-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Risk Blocks ── -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Risk Blocks</span></div>
+    <div style="max-height:300px;overflow-y:auto">
+      <table>
+        <thead><tr><th>Check</th><th>Reason</th><th>Time</th></tr></thead>
+        <tbody id="risk-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Forecasts ── -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Latest Forecasts</span></div>
+    <div style="max-height:300px;overflow-y:auto">
+      <table>
+        <thead><tr><th>City</th><th>Date</th><th>High °F</th><th>Updated</th></tr></thead>
+        <tbody id="forecast-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Order History ── -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Order History</span></div>
+    <div style="max-height:300px;overflow-y:auto">
+      <table>
+        <thead><tr><th>City</th><th>Bucket</th><th>Price</th><th>Edge</th><th>Status</th></tr></thead>
+        <tbody id="orders-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Controls Panel ── -->
+  <div class="card grid-full">
+    <div class="card-header"><span class="card-title">⚙️ Engine Controls</span></div>
+    <div class="controls" id="controls-grid">
+      <!-- Strategy -->
+      <div class="control-group">
+        <label>Min Edge Threshold</label>
+        <input type="number" id="cfg-min-edge" step="0.01" min="0" max="1" data-section="strategy" data-key="min_edge_threshold">
+      </div>
+      <div class="control-group">
+        <label>Max Entry Price</label>
+        <input type="number" id="cfg-max-entry" step="0.01" min="0" max="1" data-section="strategy" data-key="max_entry_price">
+      </div>
+      <div class="control-group">
+        <label>Min Exit Price</label>
+        <input type="number" id="cfg-min-exit" step="0.01" min="0" max="1" data-section="strategy" data-key="min_exit_price">
+      </div>
+      <div class="control-group">
+        <label>Fee Estimate</label>
+        <input type="number" id="cfg-fee" step="0.005" min="0" max="0.5" data-section="strategy" data-key="fee_estimate">
+      </div>
+      <div class="control-group">
+        <label>Slippage Estimate</label>
+        <input type="number" id="cfg-slippage" step="0.005" min="0" max="0.5" data-section="strategy" data-key="slippage_estimate">
+      </div>
+      <!-- Risk -->
+      <div class="control-group">
+        <label>Max Position Size ($)</label>
+        <input type="number" id="cfg-pos-size" step="0.5" min="0.5" data-section="risk" data-key="max_position_size_usd">
+      </div>
+      <div class="control-group">
+        <label>Max Trades/Run</label>
+        <input type="number" id="cfg-trades-run" step="1" min="1" max="50" data-section="risk" data-key="max_trades_per_run">
+      </div>
+      <div class="control-group">
+        <label>Max Total Exposure ($)</label>
+        <input type="number" id="cfg-total-exp" step="1" min="1" data-section="risk" data-key="max_total_exposure_usd">
+      </div>
+      <div class="control-group">
+        <label>Max Per-City Exposure ($)</label>
+        <input type="number" id="cfg-city-exp" step="1" min="1" data-section="risk" data-key="max_per_city_exposure_usd">
+      </div>
+      <div class="control-group">
+        <label>Max Daily Loss ($)</label>
+        <input type="number" id="cfg-daily-loss" step="1" min="1" data-section="risk" data-key="max_daily_loss_usd">
+      </div>
+      <div class="control-group">
+        <label>Cooldown (min)</label>
+        <input type="number" id="cfg-cooldown" step="5" min="0" data-section="risk" data-key="cooldown_minutes">
+      </div>
+      <div class="control-group">
+        <label>Min Hours to Resolution</label>
+        <input type="number" id="cfg-min-hours" step="1" min="0" data-section="risk" data-key="min_hours_to_resolution">
+      </div>
+      <!-- Ops -->
+      <div class="control-group">
+        <label>Lookahead Days</label>
+        <input type="number" id="cfg-lookahead" step="1" min="1" max="14" data-section="ops" data-key="lookahead_days">
+      </div>
+      <div class="control-group">
+        <label>Dashboard Refresh (sec)</label>
+        <input type="number" id="cfg-refresh" step="1" min="2" max="300" value="10">
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="saveConfig()">💾 Save Config</button>
+      <button class="btn btn-amber" onclick="togglePause()">⏸ Pause / Resume</button>
+      <button class="btn btn-danger" onclick="toggleKillSwitch()">🛑 Kill Switch</button>
+    </div>
+  </div>
+
+  <!-- ── Run Log ── -->
+  <div class="card grid-full">
+    <div class="card-header"><span class="card-title">Run History</span></div>
+    <div style="max-height:250px;overflow-y:auto">
+      <table>
+        <thead><tr><th>Time</th><th>Mode</th><th>Cities</th><th>Opps</th><th>Trades</th><th>Best Edge</th><th>Status</th></tr></thead>
+        <tbody id="runs-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<script>
+const API = window.location.origin;
+let refreshInterval = 10;
+let refreshTimer = null;
+let edgeChart = null;
+let isPaused = false;
+let killSwitch = false;
+
+// ── Toast ──
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast toast-${type}`;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3000);
+}
+
+// ── Time formatting ──
+function relTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return `${Math.round(diff)}s ago`;
+  if (diff < 3600) return `${Math.round(diff/60)}m ago`;
+  return `${Math.round(diff/3600)}h ago`;
+}
+function shortTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+// ── Fetch helpers ──
+async function api(endpoint) {
+  const r = await fetch(`${API}${endpoint}`);
+  return r.json();
+}
+async function apiPost(endpoint, data = {}) {
+  const r = await fetch(`${API}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  return r.json();
+}
+
+// ── Render functions ──
+function renderStatus(data) {
+  const pill = document.getElementById('mode-pill');
+  pill.textContent = data.mode.toUpperCase();
+  pill.className = `status-pill ${data.mode === 'live' ? 'pill-live' : 'pill-dry'}`;
+
+  const pausedPill = document.getElementById('paused-pill');
+  pausedPill.style.display = data.paused ? 'inline' : 'none';
+  isPaused = data.paused;
+
+  const killPill = document.getElementById('kill-pill');
+  killPill.style.display = data.kill_switch ? 'inline' : 'none';
+  killSwitch = data.kill_switch;
+
+  document.getElementById('kpi-exposure').textContent = `$${data.total_exposure_usd.toFixed(2)}`;
+  document.getElementById('kpi-positions').textContent = data.open_positions;
+  document.getElementById('last-update').textContent = shortTime(data.timestamp);
+}
+
+function renderPositions(data) {
+  const body = document.getElementById('positions-body');
+  const empty = document.getElementById('positions-empty');
+  if (!data.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  document.getElementById('pos-count').textContent = `${data.length} open`;
+
+  let totalPnl = 0, winners = 0, losers = 0;
+  body.innerHTML = data.map(p => {
+    totalPnl += p.unrealized_pnl;
+    if (p.unrealized_pnl > 0) winners++; else if (p.unrealized_pnl < 0) losers++;
+    const pnlClass = p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red';
+    const pctClass = p.pnl_pct >= 0 ? 'pos-green' : 'pos-red';
+    return `<tr>
+      <td><strong>${p.city_slug}</strong></td>
+      <td>${p.bucket_label}</td>
+      <td>${p.target_date}</td>
+      <td>$${p.entry_price.toFixed(4)}</td>
+      <td>$${p.current_price.toFixed(4)}</td>
+      <td>$${p.size_usd.toFixed(2)}</td>
+      <td class="${pnlClass}">$${p.unrealized_pnl.toFixed(4)}</td>
+      <td class="${pctClass}">${p.pnl_pct > 0 ? '+' : ''}${p.pnl_pct}%</td>
+    </tr>`;
+  }).join('');
+
+  const pnlEl = document.getElementById('kpi-pnl');
+  pnlEl.textContent = `$${totalPnl.toFixed(4)}`;
+  pnlEl.className = `card-value ${totalPnl >= 0 ? 'pos-green' : 'pos-red'}`;
+  document.getElementById('kpi-winners').textContent = winners;
+  document.getElementById('kpi-losers').textContent = losers;
+}
+
+function renderEdges(data) {
+  const body = document.getElementById('edges-body');
+  body.innerHTML = data.slice(0, 20).map(e => {
+    const isOpp = e.reason_code === 'OPPORTUNITY';
+    return `<tr>
+      <td>${e.city_slug}</td>
+      <td>${e.bucket_label}</td>
+      <td class="${e.net_edge > 0 ? 'pos-green' : 'pos-red'}">${(e.net_edge * 100).toFixed(1)}%</td>
+      <td><span class="badge ${isOpp ? 'badge-opp' : 'badge-blocked'}">${isOpp ? 'OPP' : 'LOW'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRiskBlocks(data) {
+  document.getElementById('risk-body').innerHTML = data.slice(0, 15).map(r =>
+    `<tr><td>${r.check_name}</td><td style="color:var(--red)">${r.block_reason || '—'}</td><td>${relTime(r.created_at)}</td></tr>`
+  ).join('');
+}
+
+function renderForecasts(data) {
+  document.getElementById('forecast-body').innerHTML = data.map(f =>
+    `<tr><td>${f.city_slug}</td><td>${f.target_date}</td><td><strong>${f.high_temp_f}°F</strong></td><td>${relTime(f.fetched_at)}</td></tr>`
+  ).join('');
+}
+
+function renderOrders(data) {
+  document.getElementById('orders-body').innerHTML = data.map(o => {
+    const badge = o.status === 'filled' ? 'badge-filled' : o.status === 'dry-run' ? 'badge-dry' : 'badge-blocked';
+    return `<tr><td>${o.city_slug}</td><td>${o.bucket_label}</td><td>$${o.price?.toFixed(4) || '—'}</td>
+      <td class="pos-green">${(o.net_edge * 100).toFixed(1)}%</td>
+      <td><span class="badge ${badge}">${o.status || '—'}</span></td></tr>`;
+  }).join('');
+}
+
+function renderRuns(data) {
+  document.getElementById('kpi-runs').textContent = data.length;
+  document.getElementById('kpi-opps').textContent = data.reduce((s, r) => s + (r.opportunities_found || 0), 0);
+  document.getElementById('kpi-trades').textContent = data.reduce((s, r) => s + (r.orders_succeeded || 0), 0);
+
+  const lastRun = data[0];
+  if (lastRun) document.getElementById('kpi-last-scan').textContent = relTime(lastRun.completed_at);
+
+  document.getElementById('runs-body').innerHTML = data.slice(0, 25).map(r =>
+    `<tr>
+      <td>${shortTime(r.started_at)}</td>
+      <td>${r.mode}</td>
+      <td>${r.cities_scanned}</td>
+      <td>${r.opportunities_found || 0}</td>
+      <td>${r.orders_succeeded || 0}</td>
+      <td class="${(r.best_edge || 0) > 0 ? 'pos-green' : ''}">${r.best_edge ? (r.best_edge * 100).toFixed(1) + '%' : '—'}</td>
+      <td><span class="badge ${r.status === 'completed' ? 'badge-opp' : 'badge-blocked'}">${r.status}</span></td>
+    </tr>`
+  ).join('');
+}
+
+function renderEdgeChart(data) {
+  const opps = data.filter(e => e.reason_code === 'OPPORTUNITY').reverse();
+  const labels = opps.map(e => shortTime(e.created_at));
+  const edges = opps.map(e => (e.net_edge * 100));
+  const cities = opps.map(e => e.city_slug);
+
+  const ctx = document.getElementById('edge-chart').getContext('2d');
+  if (edgeChart) edgeChart.destroy();
+  edgeChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Net Edge %',
+        data: edges,
+        backgroundColor: edges.map(e => e > 8 ? 'rgba(34,197,94,0.6)' : 'rgba(59,130,246,0.6)'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { afterLabel: (ctx) => cities[ctx.dataIndex] } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(30,45,61,0.5)' }, ticks: { color: '#94a3b8', callback: v => v + '%' } }
+      }
+    }
+  });
+}
+
+// ── Config ──
+async function loadConfig() {
+  const cfg = await api('/api/config');
+  document.querySelectorAll('[data-section]').forEach(el => {
+    const section = el.dataset.section;
+    const key = el.dataset.key;
+    if (cfg[section] && cfg[section][key] !== undefined) {
+      el.value = cfg[section][key];
+    }
+  });
+}
+
+async function saveConfig() {
+  const update = {};
+  document.querySelectorAll('[data-section]').forEach(el => {
+    const section = el.dataset.section;
+    const key = el.dataset.key;
+    if (!update[section]) update[section] = {};
+    const val = el.type === 'number' ? parseFloat(el.value) : el.value;
+    update[section][key] = val;
+  });
+  try {
+    const res = await apiPost('/api/config', update);
+    if (res.changed && res.changed.length) {
+      toast(`Updated: ${res.changed.join(', ')}`);
+    } else {
+      toast('No changes detected', 'error');
+    }
+  } catch (e) { toast('Save failed: ' + e.message, 'error'); }
+}
+
+async function togglePause() {
+  const endpoint = isPaused ? '/api/control/resume' : '/api/control/pause';
+  await apiPost(endpoint);
+  toast(isPaused ? 'Engine resumed' : 'Engine paused');
+  refresh();
+}
+
+async function toggleKillSwitch() {
+  if (!killSwitch && !confirm('Activate KILL SWITCH? This blocks ALL trading.')) return;
+  await apiPost(`/api/control/kill-switch?active=${!killSwitch}`);
+  toast(killSwitch ? 'Kill switch deactivated' : '🛑 Kill switch ACTIVE');
+  refresh();
+}
+
+// ── Refresh loop ──
+async function refresh() {
+  try {
+    const [status, positions, runs, edges, risks, forecasts, orders] = await Promise.all([
+      api('/api/status'), api('/api/positions'), api('/api/runs?limit=25'),
+      api('/api/edges?limit=50'), api('/api/risk-blocks?limit=15'),
+      api('/api/forecasts'), api('/api/orders?limit=20'),
+    ]);
+    renderStatus(status);
+    renderPositions(positions);
+    renderRuns(runs);
+    renderEdges(edges);
+    renderRiskBlocks(risks);
+    renderForecasts(forecasts);
+    renderOrders(orders);
+    renderEdgeChart(edges);
+  } catch (e) {
+    console.error('Refresh failed:', e);
+  }
+}
+
+function startRefreshLoop() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(refresh, refreshInterval * 1000);
+}
+
+// ── Refresh interval control ──
+document.getElementById('cfg-refresh').addEventListener('change', (e) => {
+  refreshInterval = parseInt(e.target.value) || 10;
+  document.getElementById('refresh-label').textContent = `Live · ${refreshInterval}s`;
+  startRefreshLoop();
+});
+
+// ── Init ──
+(async () => {
+  document.getElementById('refresh-label').textContent = `Live · ${refreshInterval}s`;
+  await loadConfig();
+  await refresh();
+  startRefreshLoop();
+})();
+</script>
+</body>
+</html>
